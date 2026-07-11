@@ -18,6 +18,7 @@ kotlin {
                 implementation(compose.components.uiToolingPreview)
 
                 implementation(libs.kotlinx.coroutines.core)
+                implementation(libs.okio)
 
                 // Koin DI
                 implementation(libs.koin.core)
@@ -26,10 +27,24 @@ kotlin {
             }
         }
 
+        val commonTest by getting {
+            dependencies {
+                implementation(libs.kotlin.test)
+                implementation(libs.kotlinx.coroutines.test)
+            }
+        }
+
         val desktopMain by getting {
             dependencies {
                 implementation(compose.desktop.currentOs)
                 implementation(libs.kotlinx.coroutines.swing)
+                implementation(libs.ktor.client.java)
+            }
+        }
+
+        val desktopTest by getting {
+            dependencies {
+                implementation(libs.okio.fakefilesystem)
             }
         }
     }

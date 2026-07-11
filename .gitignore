@@ -24,3 +24,7 @@ local.properties
 
 # Compose generated
 composeApp/build/
+
+# Planning / review scratch
+.plan/
+.review/

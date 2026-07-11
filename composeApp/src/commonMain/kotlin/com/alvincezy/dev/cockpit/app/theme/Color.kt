@@ -1,4 +1,4 @@
-package com.alvincezy.dev.cockpit
+package com.alvincezy.dev.cockpit.app.theme
 
 import androidx.compose.ui.graphics.Color
 

@@ -1,4 +1,4 @@
-package com.alvincezy.dev.cockpit
+package com.alvincezy.dev.cockpit.app.theme
 
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
