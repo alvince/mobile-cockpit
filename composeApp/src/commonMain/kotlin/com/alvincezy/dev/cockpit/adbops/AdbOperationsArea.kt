@@ -34,8 +34,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.alvincezy.dev.cockpit.app.theme.AppTheme
 import com.alvincezy.dev.cockpit.core.adb.AdbDevice
 import com.alvincezy.dev.cockpit.core.adb.AdbEnvironmentState
+import com.alvincezy.dev.cockpit.core.adb.AdbResolution
+import com.alvincezy.dev.cockpit.core.adb.AdbSource
+import org.jetbrains.compose.ui.tooling.preview.Preview
 import org.koin.compose.koinInject
 
 /**
@@ -277,4 +281,64 @@ private fun DeviceRow(device: AdbDevice) {
         overflow = TextOverflow.Ellipsis,
         modifier = Modifier.padding(vertical = 2.dp),
     )
+}
+
+// ---- Previews ----
+
+private val previewDevices = listOf(
+    AdbDevice(serial = "emulator-5554", state = "device", model = "Pixel_6", transport = "usb"),
+    AdbDevice(serial = "192.168.1.10:5555", state = "device", model = "Pixel_5", transport = "192.168.1.10:5555"),
+    AdbDevice(serial = "BADDEVICE", state = "unauthorized"),
+)
+
+@Preview
+@Composable
+private fun AdbOperationsContentReadyPreview() {
+    AppTheme {
+        AdbOperationsContent(
+            state = AdbOperationsState(
+                environment = AdbEnvironmentState.Ready(
+                    path = "/Users/Shared/Library/Android/sdk/platform-tools/adb",
+                    source = AdbSource.AndroidSdk,
+                ),
+                serverRunning = true,
+                devices = previewDevices,
+                lastMessage = "检测到 3 台设备",
+            ),
+            actions = AdbOperationsActions(),
+        )
+    }
+}
+
+@Preview
+@Composable
+private fun AdbOperationsContentBusyPreview() {
+    AppTheme {
+        AdbOperationsContent(
+            state = AdbOperationsState(
+                environment = AdbEnvironmentState.Checking,
+                serverRunning = null,
+                busy = true,
+                lastMessage = "检测 adb 环境…",
+            ),
+            actions = AdbOperationsActions(),
+        )
+    }
+}
+
+@Preview
+@Composable
+private fun AdbOperationsContentMissingPreview() {
+    AppTheme {
+        AdbOperationsContent(
+            state = AdbOperationsState(
+                environment = AdbEnvironmentState.Missing(
+                    AdbResolution.Missing.NoSystemAdb(searchedPaths = listOf("/usr/bin/adb")),
+                ),
+                serverRunning = false,
+                lastMessage = "未找到 adb: NoSystemAdb",
+            ),
+            actions = AdbOperationsActions(),
+        )
+    }
 }
