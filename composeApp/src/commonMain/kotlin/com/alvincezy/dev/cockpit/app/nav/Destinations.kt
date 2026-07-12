@@ -1,36 +1,5 @@
 package com.alvincezy.dev.cockpit.app.nav
 
-import kotlinx.serialization.Serializable
-
-/**
- * Type-safe navigation destinations for the main screen. `Home` is the card
- * landing state; `Detail` is the expanded two-pane state for a given [Section]
- * and (optionally) a [SubSection].
- *
- * [Detail] stores the section/sub as their enum *names* (plain [String]s) because
- * Compose Navigation only auto-derives a `NavType` for primitives — enum route
- * arguments would otherwise require a custom `NavType`/`typeMap`. Use [Detail.of]
- * to construct one from enums and [Detail.section]/[Detail.sub] to read them back.
- */
-sealed interface Destination {
-    @Serializable
-    data object Home : Destination
-
-    @Serializable
-    data class Detail(
-        val sectionName: String,
-        val subName: String? = null,
-    ) : Destination {
-        val section: Section get() = Section.valueOf(sectionName)
-        val sub: SubSection? get() = subName?.let { SubSection.valueOf(it) }
-
-        companion object {
-            fun of(section: Section, sub: SubSection? = null): Detail =
-                Detail(sectionName = section.name, subName = sub?.name)
-        }
-    }
-}
-
 /**
  * First-level sections shown as Home cards and as the primary navigation rail items.
  */

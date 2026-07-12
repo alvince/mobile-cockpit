@@ -1,95 +1,137 @@
 package com.alvincezy.dev.cockpit.app
 
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
-import androidx.navigation.compose.NavHost
-import androidx.navigation.compose.composable
-import androidx.navigation.compose.rememberNavController
-import androidx.navigation.toRoute
-import com.alvincezy.dev.cockpit.app.nav.Destination
-import com.alvincezy.dev.cockpit.app.theme.AppTheme
-import com.alvincezy.dev.cockpit.detail.DetailScaffold
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.lerp
+import com.alvincezy.dev.cockpit.app.nav.Section
+import com.alvincezy.dev.cockpit.app.nav.SubSection
+import com.alvincezy.dev.cockpit.detail.DetailPanelHost
+import com.alvincezy.dev.cockpit.detail.NavRail
 import com.alvincezy.dev.cockpit.home.HomeScreen
-import org.jetbrains.compose.ui.tooling.preview.Preview
+import kotlin.math.roundToInt
 
-private const val TRANSITION_MS = 350
+private const val MORPH_MS = 350
+
+/** Fixed width of the collapsed navigation rail (the morph's target left width). */
+private val RailWidth = 200.dp
 
 /**
- * Root navigation host wiring the two main-screen states:
- * - [Destination.Home]   → card landing state ([HomeScreen])
- * - [Destination.Detail] → expanded two-pane state ([DetailScaffold])
+ * Main screen root. Instead of navigating between two destinations, it keeps a
+ * single [expanded] flag and morphs the layout continuously:
  *
- * Transition: entering Detail slides the Home content out to the left (collapsing
- * toward the nav rail) while the Detail pane expands in from the right; going back
- * reverses the motion.
+ * - **Home** (`expanded == false`, progress 0): the left region fills the whole
+ *   window and shows the [HomeScreen] cards.
+ * - **Detail** (`expanded == true`, progress 1): the left region has shrunk to a
+ *   narrow [NavRail], and the [DetailPanelHost] has slid in from the right.
+ *
+ * A single [animateFloatAsState] `progress` drives the left region's width
+ * ([lerp] full → rail), the right panel's slide-in offset + fade, and the
+ * left content crossfade (Home cards fade out, rail fades in).
+ *
+ * Switching sections inside Detail only updates [section] (not [expanded]), so it
+ * does not replay the morph — only the right pane cross-fades (see [DetailPanelHost]).
  */
 @Composable
 fun AppRoot() {
-    val navController = rememberNavController()
+    var expanded by rememberSaveable { mutableStateOf(false) }
+    var section by rememberSaveable { mutableStateOf(Section.Connection) }
+    var sub by rememberSaveable(section) { mutableStateOf<SubSection?>(null) }
 
-    NavHost(
-        navController = navController,
-        startDestination = Destination.Home,
-    ) {
-        composable<Destination.Home>(
-            // Home leaves toward the left when Detail opens; returns from the left on back.
-            exitTransition = {
-                slideOutHorizontally(tween(TRANSITION_MS)) { full -> -full / 3 } +
-                    fadeOut(tween(TRANSITION_MS))
-            },
-            popEnterTransition = {
-                slideInHorizontally(tween(TRANSITION_MS)) { full -> -full / 3 } +
-                    fadeIn(tween(TRANSITION_MS))
-            },
-        ) {
-            HomeScreen(
-                onOpenSection = { section ->
-                    navController.navigate(Destination.Detail.of(section, section.defaultSub))
-                },
-            )
-        }
+    val progress by animateFloatAsState(
+        targetValue = if (expanded) 1f else 0f,
+        animationSpec = tween(MORPH_MS, easing = FastOutSlowInEasing),
+        label = "morph",
+    )
 
-        composable<Destination.Detail>(
-            // Detail expands in from the right; slides back out to the right on back.
-            enterTransition = {
-                slideInHorizontally(tween(TRANSITION_MS)) { full -> full } +
-                    fadeIn(tween(TRANSITION_MS))
-            },
-            popExitTransition = {
-                slideOutHorizontally(tween(TRANSITION_MS)) { full -> full } +
-                    fadeOut(tween(TRANSITION_MS))
-            },
-        ) { backStackEntry ->
-            val detail = backStackEntry.toRoute<Destination.Detail>()
-            // Section switches inside Detail are handled by DetailScaffold's local state
-            // (no re-navigation), so only the panel content changes — no window flicker.
-            DetailScaffold(
-                initialSection = detail.section,
-                initialSub = detail.sub,
-                onBackToHome = {
-                    // Pop back to the existing Home entry so the reverse (pop) transition plays.
-                    if (!navController.popBackStack(Destination.Home, inclusive = false)) {
-                        navController.navigate(Destination.Home)
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        val full = maxWidth
+        val leftW = lerp(full, RailWidth, progress)
+        val panelW = full - RailWidth
+
+        Box(modifier = Modifier.fillMaxSize()) {
+            // LEFT: resizes in place from full width down to the rail width.
+            Box(
+                modifier = Modifier
+                    .width(leftW)
+                    .fillMaxHeight()
+                    .clipToBounds(),
+            ) {
+                // Home cards: visible while collapsing (mounted until fully expanded).
+                if (progress < 1f) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .graphicsLayer { alpha = 1f - progress },
+                    ) {
+                        HomeScreen(
+                            onOpenSection = { selected ->
+                                section = selected
+                                sub = selected.defaultSub
+                                expanded = true
+                            },
+                        )
                     }
-                },
-            )
-        }
-    }
-}
+                }
+                // Nav rail: fades in as the region narrows (mounted once expanding begins).
+                if (progress > 0f) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .graphicsLayer { alpha = progress },
+                    ) {
+                        NavRail(
+                            current = section,
+                            onSelectSection = { selected ->
+                                section = selected
+                                sub = selected.defaultSub
+                            },
+                            onBackToHome = { expanded = false },
+                        )
+                    }
+                }
+            }
 
-/**
- * Preview of the app's landing state. [AppRoot] itself wraps a [NavHost], which
- * depends on navigation runtime and cannot render in a static @Preview — so we
- * preview the start-destination content ([HomeScreen]) directly instead.
- */
-@Preview
-@Composable
-private fun AppRootPreview() {
-    AppTheme {
-        HomeScreen(onOpenSection = {})
+            // RIGHT: details panel slides in from the right edge and fades with progress.
+            if (progress > 0f) {
+                Box(
+                    modifier = Modifier
+                        .width(panelW)
+                        .fillMaxHeight()
+                        .align(Alignment.CenterEnd)
+                        .offset {
+                            IntOffset(
+                                x = (panelW.roundToPx() * (1f - progress)).roundToInt(),
+                                y = 0,
+                            )
+                        }
+                        .clipToBounds()
+                        .graphicsLayer { alpha = progress },
+                ) {
+                    DetailPanelHost(
+                        section = section,
+                        sub = sub ?: section.defaultSub,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
+            }
+        }
     }
 }

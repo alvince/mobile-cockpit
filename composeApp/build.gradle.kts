@@ -2,7 +2,6 @@ plugins {
     alias(libs.plugins.kotlinMultiplatform)
     alias(libs.plugins.jetbrainsCompose)
     alias(libs.plugins.compose.compiler)
-    alias(libs.plugins.kotlin.serialization)
 }
 
 kotlin {
@@ -25,10 +24,6 @@ kotlin {
                 implementation(libs.koin.core)
                 implementation(libs.koin.compose)
                 implementation(libs.koin.compose.viewmodel)
-
-                // Navigation + type-safe routes
-                implementation(libs.navigation.compose)
-                implementation(libs.kotlinx.serialization.core)
             }
         }
 
@@ -67,6 +62,13 @@ compose.desktop {
             )
             packageName = "Cockpit"
             packageVersion = "1.0.0"
+
+            // JDK modules required at runtime by the jlink-trimmed image.
+            // `java.net.http` backs Ktor's Java engine (HttpClient(Java)) used to
+            // download platform-tools; without it the app fails on first ADB op
+            // with NoClassDefFoundError: java/net/http/HttpClient$Version.
+            // List generated via `./gradlew :composeApp:suggestRuntimeModules`.
+            modules("java.instrument", "java.management", "java.net.http", "jdk.unsupported")
 
             macOS {
                 iconFile.set(project.file("src/desktopMain/resources/icon.icns").takeIf { it.exists() })

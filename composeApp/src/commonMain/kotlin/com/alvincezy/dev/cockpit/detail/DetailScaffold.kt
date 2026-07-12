@@ -6,7 +6,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -20,10 +19,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextAlign
@@ -37,61 +32,16 @@ import com.alvincezy.dev.cockpit.presentation.PresentationPanel
 import org.jetbrains.compose.ui.tooling.preview.Preview
 
 /**
- * Expanded (Detail) state: a left navigation rail listing the primary [Section]s
- * plus a "back to Home" action, and a right-hand panel that renders the currently
- * selected section's content.
+ * Left navigation rail for the expanded (Detail) state: a "back to Home" action
+ * plus the primary [Section]s. Designed to be hosted in a fixed-width slot by the
+ * morph layout, so it fills its given width rather than wrapping content.
  *
- * The selected section is kept as **local state** (seeded from [initialSection]),
- * so switching sections only recomposes the right pane — it does NOT re-navigate,
- * which previously replayed the full-window enter/exit transition and caused a
- * whole-window flicker. Only the panel content cross-fades.
- *
- * The rail wraps its content width (widest item) rather than using a fixed width.
+ * Selecting a section changes the current section only (via [onSelectSection]) —
+ * it does not trigger any navigation/morph, so switching sections just cross-fades
+ * the right pane (see [DetailPanelHost]) with no whole-window animation.
  */
 @Composable
-fun DetailScaffold(
-    initialSection: Section,
-    initialSub: SubSection?,
-    onBackToHome: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    var current by rememberSaveable(initialSection) { mutableStateOf(initialSection) }
-    var currentSub by rememberSaveable(initialSection) { mutableStateOf(initialSub) }
-
-    Row(modifier = modifier.fillMaxSize()) {
-        NavRail(
-            current = current,
-            onSelectSection = { section ->
-                current = section
-                currentSub = section.defaultSub
-            },
-            onBackToHome = onBackToHome,
-        )
-
-        VerticalDivider()
-
-        Box(modifier = Modifier.fillMaxSize()) {
-            Crossfade(
-                targetState = current,
-                animationSpec = tween(220),
-                modifier = Modifier.fillMaxSize(),
-            ) { section ->
-                DetailPanel(
-                    section = section,
-                    sub = if (section == current) currentSub else section.defaultSub,
-                    modifier = Modifier.fillMaxSize(),
-                )
-            }
-        }
-    }
-}
-
-/**
- * A content-width (wrap-content) navigation rail: a vertical column of items sized
- * to the widest entry via [IntrinsicSize.Max].
- */
-@Composable
-private fun NavRail(
+fun NavRail(
     current: Section,
     onSelectSection: (Section) -> Unit,
     onBackToHome: () -> Unit,
@@ -103,7 +53,7 @@ private fun NavRail(
     ) {
         Column(
             modifier = Modifier
-                .width(IntrinsicSize.Max)
+                .fillMaxWidth()
                 .padding(vertical = 12.dp, horizontal = 8.dp),
         ) {
             NavRailItem(
@@ -153,6 +103,31 @@ private fun NavRailItem(
 }
 
 /**
+ * The right pane: renders the current [section] / [sub] content, cross-fading
+ * when the section changes so only the panel content swaps (no window flicker).
+ */
+@Composable
+fun DetailPanelHost(
+    section: Section,
+    sub: SubSection?,
+    modifier: Modifier = Modifier,
+) {
+    Box(modifier = modifier.fillMaxSize()) {
+        Crossfade(
+            targetState = section,
+            animationSpec = tween(220),
+            modifier = Modifier.fillMaxSize(),
+        ) { target ->
+            DetailPanel(
+                section = target,
+                sub = if (target == section) sub else target.defaultSub,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+    }
+}
+
+/**
  * Dispatches the right-pane content for the given [section] / [sub].
  */
 @Composable
@@ -168,15 +143,25 @@ private fun DetailPanel(
     }
 }
 
-// Uses the Presentation section so the preview needs no Koin-injected ADB panel.
+// Previews the fully-expanded (Detail) layout. Uses Section.Presentation so the
+// preview needs no Koin-injected ADB panel.
 @Preview
 @Composable
-private fun DetailScaffoldPreview() {
+private fun DetailExpandedPreview() {
     AppTheme {
-        DetailScaffold(
-            initialSection = Section.Presentation,
-            initialSub = Section.Presentation.defaultSub,
-            onBackToHome = {},
-        )
+        Row(modifier = Modifier.fillMaxSize()) {
+            NavRail(
+                current = Section.Presentation,
+                onSelectSection = {},
+                onBackToHome = {},
+                modifier = Modifier.width(200.dp),
+            )
+            VerticalDivider()
+            DetailPanelHost(
+                section = Section.Presentation,
+                sub = Section.Presentation.defaultSub,
+                modifier = Modifier.weight(1f),
+            )
+        }
     }
 }
