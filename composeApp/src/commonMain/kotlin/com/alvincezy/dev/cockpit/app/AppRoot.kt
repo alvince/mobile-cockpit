@@ -53,7 +53,10 @@ private val RailWidth = 200.dp
 fun AppRoot() {
     var expanded by rememberSaveable { mutableStateOf(false) }
     var section by rememberSaveable { mutableStateOf(Section.Connection) }
-    var sub by rememberSaveable(section) { mutableStateOf<SubSection?>(null) }
+    // Not keyed on [section]: selecting a sub from a different section's fly-out
+    // sets both section and sub in one event, so the sub must survive the section
+    // change. Callers reset sub explicitly (to the section's default) when needed.
+    var sub by rememberSaveable { mutableStateOf<SubSection?>(null) }
 
     val progress by animateFloatAsState(
         targetValue = if (expanded) 1f else 0f,
@@ -99,9 +102,14 @@ fun AppRoot() {
                     ) {
                         NavRail(
                             current = section,
+                            currentSub = sub,
                             onSelectSection = { selected ->
                                 section = selected
                                 sub = selected.defaultSub
+                            },
+                            onSelectSub = { selected ->
+                                section = selected.section
+                                sub = selected
                             },
                             onBackToHome = { expanded = false },
                         )

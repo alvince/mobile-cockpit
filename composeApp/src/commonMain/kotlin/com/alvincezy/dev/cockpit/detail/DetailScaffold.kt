@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -19,10 +20,22 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.onPointerEvent
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Popup
 import com.alvincezy.dev.cockpit.app.nav.Section
 import com.alvincezy.dev.cockpit.app.nav.SubSection
 import com.alvincezy.dev.cockpit.app.theme.AppTheme
@@ -31,22 +44,44 @@ import com.alvincezy.dev.cockpit.developertools.DeveloperToolsPanel
 import com.alvincezy.dev.cockpit.presentation.PresentationPanel
 import org.jetbrains.compose.ui.tooling.preview.Preview
 
+/** How long the fly-out stays open after the cursor leaves, so the pointer can
+ *  cross the gap from a rail item into its pop-out without dismissing it. */
+private const val FLYOUT_CLOSE_DELAY_MS = 150L
+
 /**
  * Left navigation rail for the expanded (Detail) state: a "back to Home" action
  * plus the primary [Section]s. Designed to be hosted in a fixed-width slot by the
  * morph layout, so it fills its given width rather than wrapping content.
  *
- * Selecting a section changes the current section only (via [onSelectSection]) —
- * it does not trigger any navigation/morph, so switching sections just cross-fades
- * the right pane (see [DetailPanelHost]) with no whole-window animation.
+ * Clicking a section enters it via [onSelectSection] (opening its [Section.defaultSub]),
+ * which keeps the rail usable without a mouse. Hovering a section reveals a [Popup]
+ * fly-out of that section's [SubSection]s; picking one calls [onSelectSub].
+ *
+ * Neither action triggers the morph — they only update state, so the right pane
+ * cross-fades (see [DetailPanelHost]) with no whole-window animation.
  */
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun NavRail(
     current: Section,
+    currentSub: SubSection?,
     onSelectSection: (Section) -> Unit,
+    onSelectSub: (SubSection) -> Unit,
     onBackToHome: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    // The section whose fly-out is currently shown, plus a "requested to close"
+    // flag so a short grace period can keep it open while the cursor travels.
+    var hovered by remember { mutableStateOf<Section?>(null) }
+    var closeRequested by remember { mutableStateOf(false) }
+
+    LaunchedEffect(closeRequested, hovered) {
+        if (closeRequested && hovered != null) {
+            kotlinx.coroutines.delay(FLYOUT_CLOSE_DELAY_MS)
+            if (closeRequested) hovered = null
+        }
+    }
+
     Surface(
         modifier = modifier.fillMaxHeight(),
         color = MaterialTheme.colorScheme.surface,
@@ -63,11 +98,92 @@ fun NavRail(
             )
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
             Section.entries.forEach { entry ->
-                NavRailItem(
-                    label = entry.label,
-                    selected = entry == current,
-                    onClick = { onSelectSection(entry) },
-                )
+                var anchorWidthPx by remember { mutableStateOf(0) }
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .onGloballyPositioned { anchorWidthPx = it.size.width },
+                ) {
+                    NavRailItem(
+                        label = entry.label,
+                        selected = entry == current,
+                        onClick = { onSelectSection(entry) },
+                        modifier = Modifier
+                            .onPointerEvent(PointerEventType.Enter) {
+                                hovered = entry
+                                closeRequested = false
+                            }
+                            .onPointerEvent(PointerEventType.Exit) {
+                                closeRequested = true
+                            },
+                    )
+                    if (hovered == entry) {
+                        SubSectionFlyout(
+                            section = entry,
+                            currentSub = currentSub,
+                            anchorWidthPx = anchorWidthPx,
+                            onSelectSub = {
+                                onSelectSub(it)
+                                hovered = null
+                                closeRequested = false
+                            },
+                            onEnter = { closeRequested = false },
+                            onExit = { closeRequested = true },
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Fly-out [Popup] anchored to the right edge of a rail item, listing the
+ * [section]'s sub-sections. It tracks its own pointer enter/exit so the fly-out
+ * survives the cursor crossing over from the rail item.
+ */
+@OptIn(ExperimentalComposeUiApi::class)
+@Composable
+private fun SubSectionFlyout(
+    section: Section,
+    currentSub: SubSection?,
+    anchorWidthPx: Int,
+    onSelectSub: (SubSection) -> Unit,
+    onEnter: () -> Unit,
+    onExit: () -> Unit,
+) {
+    Popup(
+        // The Popup positions relative to its parent (the anchor item Box), which
+        // has its top-start at the item's top-left. Offsetting x by the anchor's
+        // full width drops the fly-out just to the right of the rail, top-aligned
+        // with the hovered item.
+        offset = IntOffset(x = anchorWidthPx, y = 0),
+        alignment = Alignment.TopStart,
+    ) {
+        Surface(
+            modifier = Modifier
+                .onPointerEvent(PointerEventType.Enter) { onEnter() }
+                .onPointerEvent(PointerEventType.Exit) { onExit() },
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 3.dp,
+            shadowElevation = 6.dp,
+            shape = RoundedCornerShape(8.dp),
+        ) {
+            // IntrinsicSize.Max sizes the column to its widest item, so the
+            // fly-out is only as wide as the longest label (like a normal menu);
+            // each item then fills that intrinsic width so backgrounds line up.
+            Column(
+                modifier = Modifier
+                    .width(IntrinsicSize.Max)
+                    .padding(4.dp),
+            ) {
+                SubSection.forSection(section).forEach { item ->
+                    NavRailItem(
+                        label = item.label,
+                        selected = item == currentSub,
+                        onClick = { onSelectSub(item) },
+                    )
+                }
             }
         }
     }
@@ -152,7 +268,9 @@ private fun DetailExpandedPreview() {
         Row(modifier = Modifier.fillMaxSize()) {
             NavRail(
                 current = Section.Presentation,
+                currentSub = Section.Presentation.defaultSub,
                 onSelectSection = {},
+                onSelectSub = {},
                 onBackToHome = {},
                 modifier = Modifier.width(200.dp),
             )
