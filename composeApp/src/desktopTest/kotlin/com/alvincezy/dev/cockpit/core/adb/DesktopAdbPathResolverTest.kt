@@ -1,15 +1,15 @@
 package com.alvincezy.dev.cockpit.core.adb
 
-import java.io.File
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.test.runTest
+import okio.Path
+import okio.fakefilesystem.FakeFileSystem
+import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.emptyFlow
-import okio.Path
-import okio.fakefilesystem.FakeFileSystem
 
 class DesktopAdbPathResolverTest {
 

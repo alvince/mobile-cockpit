@@ -1,11 +1,11 @@
 package com.alvincezy.dev.cockpit.core.adb
 
-import java.io.File
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import okio.FileSystem
 import okio.Path
 import okio.Path.Companion.toPath
+import java.io.File
 
 /**
  * Resolves an adb executable following the priority chain defined in the plan:

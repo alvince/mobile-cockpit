@@ -1,13 +1,13 @@
 package com.alvincezy.dev.cockpit.core.adb
 
-import kotlin.test.Test
-import kotlin.test.assertTrue
-import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.test.runTest
 import okio.Path
 import okio.fakefilesystem.FakeFileSystem
 import org.junit.Assume.assumeTrue
+import kotlin.test.Test
+import kotlin.test.assertTrue
 
 /**
  * End-to-end integration test that exercises the real ADB resolution + execution

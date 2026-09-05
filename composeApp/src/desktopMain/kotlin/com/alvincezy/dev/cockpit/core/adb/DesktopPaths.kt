@@ -22,6 +22,12 @@ object DesktopPaths {
     val configFile: Path
         get() = dataDir / "config.properties"
 
+    // Note: window state is unrelated to ADB, but DesktopPaths is the single entry
+    // point for everything under ~/.cockpit, so it lives here for now. If more
+    // non-ADB paths accrue, promote DesktopPaths to a shared core/paths package.
+    val windowStateFile: Path
+        get() = dataDir / "window.properties"
+
     val toolsDir: Path
         get() = dataDir / "tools" / "platform-tools"
 

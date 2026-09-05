@@ -1,10 +1,10 @@
 package com.alvincezy.dev.cockpit.core.adb
 
+import okio.Path.Companion.toPath
+import okio.fakefilesystem.FakeFileSystem
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
-import okio.Path.Companion.toPath
-import okio.fakefilesystem.FakeFileSystem
 
 class DesktopAdbConfigStoreTest {
 

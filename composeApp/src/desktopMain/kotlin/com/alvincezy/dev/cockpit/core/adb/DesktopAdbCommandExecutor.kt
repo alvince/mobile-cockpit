@@ -1,7 +1,5 @@
 package com.alvincezy.dev.cockpit.core.adb
 
-import java.io.BufferedReader
-import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
@@ -9,6 +7,8 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
+import java.io.BufferedReader
+import java.util.concurrent.TimeUnit
 
 /**
  * Executes adb via [ProcessBuilder]. The adb binary is located lazily through

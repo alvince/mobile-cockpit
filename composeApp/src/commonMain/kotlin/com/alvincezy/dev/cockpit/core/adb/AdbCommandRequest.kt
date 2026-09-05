@@ -1,8 +1,8 @@
 package com.alvincezy.dev.cockpit.core.adb
 
+import okio.Path
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
-import okio.Path
 
 data class AdbCommandRequest(
     val args: List<String>,

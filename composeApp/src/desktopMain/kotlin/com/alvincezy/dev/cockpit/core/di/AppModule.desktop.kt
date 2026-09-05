@@ -14,6 +14,8 @@ import com.alvincezy.dev.cockpit.core.adb.DesktopAdbDeviceDetector
 import com.alvincezy.dev.cockpit.core.adb.DesktopAdbDownloader
 import com.alvincezy.dev.cockpit.core.adb.DesktopAdbPathResolver
 import com.alvincezy.dev.cockpit.core.adb.DesktopAdbServerManager
+import com.alvincezy.dev.cockpit.core.window.DesktopWindowStateStore
+import com.alvincezy.dev.cockpit.core.window.WindowStateStore
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.java.Java
 import okio.FileSystem
@@ -30,6 +32,7 @@ actual fun platformModule(): Module = module {
     single<HttpClient> { HttpClient(Java) }
 
     single<AdbConfigStore> { DesktopAdbConfigStore(get()) }
+    single<WindowStateStore> { DesktopWindowStateStore(get()) }
     single<AdbCacheManager> { DesktopAdbCacheManager(get()) }
     single<AdbDownloader> { DesktopAdbDownloader(get(), get(), get()) }
     single<AdbPathResolver> { DesktopAdbPathResolver(get(), get(), get(), get()) }

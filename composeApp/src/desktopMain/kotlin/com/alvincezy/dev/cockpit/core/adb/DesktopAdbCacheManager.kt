@@ -1,11 +1,11 @@
 package com.alvincezy.dev.cockpit.core.adb
 
-import java.io.File
-import java.security.MessageDigest
-import java.util.zip.ZipInputStream
 import okio.FileSystem
 import okio.Path
 import okio.buffer
+import java.io.File
+import java.security.MessageDigest
+import java.util.zip.ZipInputStream
 
 /**
  * Manages the platform-tools cache under `~/.cockpit/tools/platform-tools/<version>/`.

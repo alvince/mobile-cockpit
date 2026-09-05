@@ -1,5 +1,8 @@
 package com.alvincezy.dev.cockpit.core.adb
 
+import okio.Path
+import okio.Path.Companion.toPath
+import okio.fakefilesystem.FakeFileSystem
 import java.io.ByteArrayOutputStream
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
@@ -9,10 +12,6 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
-import okio.Path
-import okio.Path.Companion.toPath
-import okio.buffer
-import okio.fakefilesystem.FakeFileSystem
 
 class DesktopAdbCacheManagerTest {
 
