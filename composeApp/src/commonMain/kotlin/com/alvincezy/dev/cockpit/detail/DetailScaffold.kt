@@ -44,9 +44,20 @@ import com.alvincezy.dev.cockpit.developertools.DeveloperToolsPanel
 import com.alvincezy.dev.cockpit.presentation.PresentationPanel
 import org.jetbrains.compose.ui.tooling.preview.Preview
 
+/** How long the cursor must rest on a rail item before its fly-out appears, so a
+ *  pointer merely passing over the rail does not strobe every fly-out on the way
+ *  to the one it wants. NN/g and Baymard both put the range at 300–500 ms; 400 ms
+ *  filters a pass-through while still feeling immediate for a deliberate hover. */
+internal const val FLYOUT_OPEN_DELAY_MS = 400L
+
 /** How long the fly-out stays open after the cursor leaves, so the pointer can
  *  cross the gap from a rail item into its pop-out without dismissing it. */
 private const val FLYOUT_CLOSE_DELAY_MS = 150L
+
+/** Shorter dwell when a fly-out is already open and the cursor moves to a sibling
+ *  rail item: the user is clearly navigating the rail, so don't make them wait the
+ *  full open delay again, but long enough not to flash fly-outs on the diagonal. */
+private const val FLYOUT_SWITCH_DELAY_MS = 120L
 
 /**
  * Left navigation rail for the expanded (Detail) state: a "back to Home" action
@@ -54,8 +65,9 @@ private const val FLYOUT_CLOSE_DELAY_MS = 150L
  * morph layout, so it fills its given width rather than wrapping content.
  *
  * Clicking a section enters it via [onSelectSection] (opening its [Section.defaultSub]),
- * which keeps the rail usable without a mouse. Hovering a section reveals a [Popup]
- * fly-out of that section's [SubSection]s; picking one calls [onSelectSub].
+ * which keeps the rail usable without a mouse. Dwelling on a section for
+ * [FLYOUT_OPEN_DELAY_MS] reveals a [Popup] fly-out of that section's
+ * [SubSection]s; picking one calls [onSelectSub].
  *
  * Neither action triggers the morph — they only update state, so the right pane
  * cross-fades (see [DetailPanelHost]) with no whole-window animation.
@@ -72,8 +84,18 @@ fun NavRail(
 ) {
     // The section whose fly-out is currently shown, plus a "requested to close"
     // flag so a short grace period can keep it open while the cursor travels.
+    // [hovered] only changes once the cursor has dwelt on an item; [pending] is
+    // the dwell timer itself.
     var hovered by remember { mutableStateOf<Section?>(null) }
     var closeRequested by remember { mutableStateOf(false) }
+    var pending by remember { mutableStateOf<Section?>(null) }
+
+    LaunchedEffect(pending) {
+        val target = pending ?: return@LaunchedEffect
+        val alreadyOpen = hovered != null
+        kotlinx.coroutines.delay(if (alreadyOpen) FLYOUT_SWITCH_DELAY_MS else FLYOUT_OPEN_DELAY_MS)
+        hovered = target
+    }
 
     LaunchedEffect(closeRequested, hovered) {
         if (closeRequested && hovered != null) {
@@ -110,10 +132,14 @@ fun NavRail(
                         onClick = { onSelectSection(entry) },
                         modifier = Modifier
                             .onPointerEvent(PointerEventType.Enter) {
-                                hovered = entry
                                 closeRequested = false
+                                pending = entry
                             }
                             .onPointerEvent(PointerEventType.Exit) {
+                                pending = null
+                                // Ask the fly-out to close; the grace period
+                                // cancels it if the cursor lands in the popup
+                                // or on another rail item first.
                                 closeRequested = true
                             },
                     )
@@ -124,6 +150,7 @@ fun NavRail(
                             anchorWidthPx = anchorWidthPx,
                             onSelectSub = {
                                 onSelectSub(it)
+                                pending = null
                                 hovered = null
                                 closeRequested = false
                             },
