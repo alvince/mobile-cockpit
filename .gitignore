@@ -25,6 +25,14 @@ local.properties
 # Compose generated
 composeApp/build/
 
+# Bundled adb staged at build time from the build machine; never commit binaries.
+# Only the shared license text under appResources/common/ is tracked.
+composeApp/appResources/*/
+!composeApp/appResources/common/
+
+# IDE output
+composeApp/bin/
+
 # Planning / review scratch
 .plan/
 .review/

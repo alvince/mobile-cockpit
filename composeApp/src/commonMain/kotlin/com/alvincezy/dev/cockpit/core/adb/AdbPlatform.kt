@@ -8,6 +8,4 @@ enum class AdbPlatform(
     MACOS("macos", "darwin", "adb"),
     WINDOWS_X64("windows-x64", "windows", "adb.exe"),
     LINUX_X64("linux-x64", "linux", "adb");
-
-    fun zipName(version: String): String = "platform-tools-$version-$osName.zip"
 }

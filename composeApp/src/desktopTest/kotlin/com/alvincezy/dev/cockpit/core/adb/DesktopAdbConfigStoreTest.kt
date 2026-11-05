@@ -17,11 +17,6 @@ class DesktopAdbConfigStoreTest {
         val fs = FakeFileSystem()
         val config = store(fs).load()
 
-        assertEquals(true, config.autoDownload)
-        assertEquals(3, config.retryCount)
-        assertEquals(1000L, config.retryBaseDelayMs)
-        assertEquals(MeteredNetworkBehavior.ASK, config.meteredNetworkBehavior)
-        assertEquals(2, config.maxCacheVersions)
         assertNull(config.adbPath)
     }
 
@@ -29,14 +24,7 @@ class DesktopAdbConfigStoreTest {
     fun savesAndReloadsRoundTrip() {
         val fs = FakeFileSystem()
         val s = store(fs)
-        val original = AdbConfig(
-            adbPath = "/opt/adb",
-            autoDownload = false,
-            retryCount = 5,
-            retryBaseDelayMs = 2000,
-            meteredNetworkBehavior = MeteredNetworkBehavior.BLOCK,
-            maxCacheVersions = 4,
-        )
+        val original = AdbConfig(adbPath = "/opt/adb")
         s.save(original)
 
         val loaded = s.load()
@@ -49,11 +37,10 @@ class DesktopAdbConfigStoreTest {
         val s = store(fs)
         s.save(AdbConfig())
 
-        val updated = s.update { it.copy(autoDownload = false, adbPath = "/x/adb") }
+        val updated = s.update { it.copy(adbPath = "/x/adb") }
 
-        assertEquals(false, updated.autoDownload)
         assertEquals("/x/adb", updated.adbPath)
-        assertEquals(false, s.load().autoDownload)
+        assertEquals("/x/adb", s.load().adbPath)
     }
 
     @Test
@@ -65,15 +52,21 @@ class DesktopAdbConfigStoreTest {
                 """
                 # comment
                 garbage-without-equals
-                autoDownload=false
-                retryCount=notanumber
+                adb.path=/opt/adb
                 """.trimIndent()
             )
         }
 
         val config = store(fs).load()
-        assertEquals(false, config.autoDownload)
-        // Falls back to default when unparsable.
-        assertEquals(3, config.retryCount)
+        assertEquals("/opt/adb", config.adbPath)
+    }
+
+    @Test
+    fun blankAdbPathTreatedAsUnset() {
+        val fs = FakeFileSystem()
+        fs.createDirectories(configPath.parent!!)
+        fs.write(configPath) { writeUtf8("adb.path=\n") }
+
+        assertNull(store(fs).load().adbPath)
     }
 }

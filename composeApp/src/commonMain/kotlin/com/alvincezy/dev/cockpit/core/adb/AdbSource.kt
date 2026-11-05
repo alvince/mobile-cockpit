@@ -5,5 +5,5 @@ enum class AdbSource {
     EnvironmentVariable,
     AndroidSdk,
     SystemPath,
-    Cached,
+    Bundled,
 }

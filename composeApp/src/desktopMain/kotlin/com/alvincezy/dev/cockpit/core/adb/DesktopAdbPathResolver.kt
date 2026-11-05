@@ -1,34 +1,34 @@
 package com.alvincezy.dev.cockpit.core.adb
 
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flow
+import java.io.File
 import okio.FileSystem
 import okio.Path
 import okio.Path.Companion.toPath
-import java.io.File
 
 /**
- * Resolves an adb executable following the priority chain defined in the plan:
+ * Resolves an adb executable following this priority chain:
  *
  * 1. `adb.path` in `~/.cockpit/config.properties`
  * 2. `COCKPIT_ADB_PATH`
  * 3. `ANDROID_HOME` / `ANDROID_SDK_ROOT` -> `platform-tools/adb`
  * 4. system `PATH`
- * 5. cached download
- * 6. trigger a fresh download
+ * 5. the adb bundled inside the application package
  *
  * An invalid entry at any level is skipped and resolution continues to the next.
  */
 class DesktopAdbPathResolver(
     private val configStore: AdbConfigStore,
-    private val cacheManager: AdbCacheManager,
-    private val downloader: AdbDownloader,
     private val fileSystem: FileSystem,
-    private val manifest: PlatformToolsManifest = PlatformToolsManifest.load(),
     private val platform: AdbPlatform = DesktopPaths.currentPlatform() ?: AdbPlatform.LINUX_X64,
+    private val bundledDir: Path? = DesktopPaths.bundledAdbDir(),
+    private val runtimeDir: Path? = DesktopPaths.bundledRuntimeDir,
     private val env: (String) -> String? = System::getenv,
     private val pathEntries: () -> List<String> = {
         System.getenv("PATH")?.split(File.pathSeparator).orEmpty()
+    },
+    private val isExecutable: (Path) -> Boolean = { path ->
+        val file = File(path.toString())
+        file.isFile && file.canExecute()
     },
 ) : AdbPathResolver {
 
@@ -36,69 +36,9 @@ class DesktopAdbPathResolver(
         val searched = mutableListOf<String>()
 
         findSystemAdb(searched)?.let { return it }
-
-        cacheManager.cachedAdb(manifest.version)?.let {
-            return AdbResolution.Cached(it, manifest.version)
-        }
+        findBundled(searched)?.let { return it }
 
         return AdbResolution.Missing.NoSystemAdb(searched)
-    }
-
-    override fun resolveOrDownload(): Flow<AdbResolution> = flow {
-        when (val resolution = resolve()) {
-            is AdbResolution.System, is AdbResolution.Cached, is AdbResolution.Downloading ->
-                emit(resolution)
-
-            is AdbResolution.Missing -> {
-                val config = configStore.load()
-                if (!config.autoDownload) {
-                    emit(AdbResolution.Missing.DisabledByUser("autoDownload is disabled"))
-                    return@flow
-                }
-                emit(AdbResolution.Downloading(null))
-
-                val version = manifest.version
-                val archive = DesktopPaths.toolsDir / platform.zipName(version)
-                var failure: Throwable? = null
-
-                downloader.download(version, platform, archive).collect { progress ->
-                    when (progress) {
-                        is DownloadProgress.Started -> emit(AdbResolution.Downloading(0f))
-                        is DownloadProgress.InProgress -> {
-                            val fraction = if (progress.totalBytes > 0) {
-                                progress.bytesRead.toFloat() / progress.totalBytes
-                            } else {
-                                null
-                            }
-                            emit(AdbResolution.Downloading(fraction))
-                        }
-
-                        is DownloadProgress.Failed -> failure = progress.error
-                        is DownloadProgress.Done -> Unit
-                    }
-                }
-
-                if (failure != null) {
-                    emit(AdbResolution.Missing.DownloadFailed(failure!!))
-                    return@flow
-                }
-
-                val installed = runCatching {
-                    cacheManager.install(archive, version, manifest.sha256For(platform))
-                }.getOrElse {
-                    emit(AdbResolution.Missing.VerificationFailed(archive))
-                    return@flow
-                }
-                runCatching { if (fileSystem.exists(archive)) fileSystem.delete(archive) }
-                cacheManager.trimCache(config.maxCacheVersions)
-
-                if (cacheManager.validateCache(version)) {
-                    emit(AdbResolution.Cached(installed, version))
-                } else {
-                    emit(AdbResolution.Missing.CacheCorrupted(installed))
-                }
-            }
-        }
     }
 
     private fun findSystemAdb(searched: MutableList<String>): AdbResolution.System? {
@@ -141,8 +81,60 @@ class DesktopAdbPathResolver(
         return null
     }
 
+    /** 5. the adb shipped inside the app package (`compose.application.resources.dir/adb`). */
+    private fun findBundled(searched: MutableList<String>): AdbResolution.Bundled? {
+        val dir = bundledDir ?: return null
+        val source = dir / platform.executableName
+        searched += source.toString()
+
+        val executable = materializeBundled(dir, source) ?: return null
+        return AdbResolution.Bundled(executable, readBundledVersion(dir))
+    }
+
+    /**
+     * Copies the bundled adb (and any sibling files, e.g. the Windows USB DLLs)
+     * into [runtimeDir] and marks it executable. jpackage drops the executable bit
+     * from app resources, and the bundle itself may be read-only (running from a
+     * DMG) or signed, so we never modify it in place. Re-copies only when the size
+     * differs, which keeps repeated `resolve()` calls cheap.
+     */
+    private fun materializeBundled(dir: Path, source: Path): Path? {
+        if (!fileSystem.exists(source)) return null
+        val targetDir = runtimeDir ?: return null
+
+        return runCatching {
+            fileSystem.createDirectories(targetDir)
+            fileSystem.list(dir)
+                .filter { fileSystem.metadataOrNull(it)?.isRegularFile == true }
+                .forEach { file ->
+                    val target = targetDir / file.name
+                    val sameSize = fileSystem.metadataOrNull(target)?.size ==
+                        fileSystem.metadataOrNull(file)?.size
+                    if (!sameSize) {
+                        if (fileSystem.exists(target)) fileSystem.delete(target)
+                        fileSystem.copy(file, target)
+                    }
+                }
+
+            val executable = targetDir / platform.executableName
+            File(executable.toString()).setExecutable(true, false)
+            executable.takeIf { isExecutable(it) }
+        }.getOrNull()
+    }
+
+    private fun readBundledVersion(dir: Path): String? =
+        runCatching { fileSystem.read(dir / VERSION_FILE) { readUtf8() } }
+            .getOrNull()
+            ?.lineSequence()
+            ?.map { it.trim() }
+            ?.firstOrNull { it.isNotEmpty() }
+
     private fun validExecutable(path: String): Path? {
         val file = File(path)
         return if (file.isFile && file.canExecute()) path.toPath() else null
+    }
+
+    private companion object {
+        const val VERSION_FILE = "version.txt"
     }
 }

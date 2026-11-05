@@ -12,8 +12,8 @@ import java.util.concurrent.TimeUnit
 
 /**
  * Executes adb via [ProcessBuilder]. The adb binary is located lazily through
- * [AdbPathResolver]; when a cached/downloaded adb is used, its directory is
- * prepended to the child process PATH so scrcpy and adb agree on the binary.
+ * [AdbPathResolver]; the resolved adb's directory is prepended to the child
+ * process PATH so scrcpy and adb agree on the binary.
  */
 class DesktopAdbCommandExecutor(
     private val pathResolver: AdbPathResolver,
@@ -80,7 +80,7 @@ class DesktopAdbCommandExecutor(
     private suspend fun resolveAdbPath(): String {
         return when (val resolution = pathResolver.resolve()) {
             is AdbResolution.System -> resolution.path.toString()
-            is AdbResolution.Cached -> resolution.path.toString()
+            is AdbResolution.Bundled -> resolution.path.toString()
             else -> throw AdbNotFoundException(resolution)
         }
     }

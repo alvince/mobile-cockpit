@@ -169,7 +169,6 @@ fun AdbOperationsContent(
 private fun EnvironmentRow(environment: AdbEnvironmentState, serverRunning: Boolean?) {
     val text = when (environment) {
         AdbEnvironmentState.Checking -> "环境: 检测中…"
-        is AdbEnvironmentState.Downloading -> "环境: 下载中…"
         is AdbEnvironmentState.Ready -> buildString {
             append("环境: 就绪 · 来源=${environment.source}")
             environment.version?.let { append(" · 版本=$it") }

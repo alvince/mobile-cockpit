@@ -28,10 +28,26 @@ object DesktopPaths {
     val windowStateFile: Path
         get() = dataDir / "window.properties"
 
-    val toolsDir: Path
-        get() = dataDir / "tools" / "platform-tools"
+    /**
+     * Writable directory where the bundled adb is materialized at runtime. jpackage
+     * drops the executable bit from app resources, so the binary is copied here and
+     * marked executable instead of mutating the (possibly signed, possibly read-only)
+     * application bundle.
+     */
+    val bundledRuntimeDir: Path
+        get() = dataDir / "bin"
 
-    fun versionDir(version: String): Path = toolsDir / version
+    /**
+     * Directory holding the adb bundled at build time, or null when the app is not
+     * running from a Compose Desktop distribution (the system property is set for
+     * both `run` and packaged apps).
+     */
+    fun bundledAdbDir(): Path? {
+        val resourcesDir = System.getProperty("compose.application.resources.dir")
+            ?.takeIf { it.isNotBlank() }
+            ?: return null
+        return resourcesDir.toPath() / "adb"
+    }
 
     /** Detects the current platform, or null if unsupported. */
     fun currentPlatform(): AdbPlatform? {

@@ -39,18 +39,15 @@ class AdbOperationsController(
             is AdbResolution.System ->
                 AdbEnvironmentState.Ready(resolution.path.toString(), resolution.source)
 
-            is AdbResolution.Cached ->
+            is AdbResolution.Bundled ->
                 AdbEnvironmentState.Ready(
                     resolution.path.toString(),
-                    com.alvincezy.dev.cockpit.core.adb.AdbSource.Cached,
+                    com.alvincezy.dev.cockpit.core.adb.AdbSource.Bundled,
                     resolution.version,
                 )
 
             is AdbResolution.Missing ->
                 AdbEnvironmentState.Missing(resolution)
-
-            is AdbResolution.Downloading ->
-                AdbEnvironmentState.Downloading(0, 0)
         }
         _state.update { it.copy(environment = env) }
         if (env is AdbEnvironmentState.Ready) {
@@ -117,7 +114,6 @@ class AdbOperationsController(
         is AdbEnvironmentState.Ready -> "adb 就绪 (${env.source})"
         is AdbEnvironmentState.Missing -> "未找到 adb: ${env.resolution::class.simpleName}"
         AdbEnvironmentState.Checking -> "检测中…"
-        is AdbEnvironmentState.Downloading -> "下载中…"
     }
 
     private fun runExclusive(action: String, block: suspend () -> String) {
